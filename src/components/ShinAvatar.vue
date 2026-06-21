@@ -1,6 +1,6 @@
 <template>
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" :width="size" :height="size">
-    <!-- 腄部 -->
+    <!-- 头部 -->
     <circle cx="50" cy="42" r="28" fill="#FFDBA4"/>
     <!-- 头发 -->
     <ellipse cx="50" cy="16" rx="26" ry="10" fill="#2C1810"/>
@@ -19,7 +19,7 @@
     <ellipse cx="50" cy="52" rx="5" ry="3" fill="#F0C080"/>
     <circle cx="47" cy="52" r="1.5" fill="#c0885a"/>
     <circle cx="53" cy="52" r="1.5" fill="#c0885a"/>
-    <!-- 咒害的小调皮嘴巴 -->
+    <!-- 调皮嘴巴 -->
     <path d="M38 61 Q50 70 62 61" stroke="#c0885a" stroke-width="2.5" fill="#FF9999" stroke-linecap="round"/>
     <path d="M44 64 Q50 68 56 64" fill="#cc4444"/>
     <!-- 舌头 -->
@@ -38,6 +38,5 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ size?: number }>()
 const { size = 40 } = defineProps<{ size?: number }>()
 </script>
