@@ -1,10 +1,11 @@
 import { reactive, computed } from 'vue'
 import type { GameState, Token, PlayerColor } from '../types/game'
 
-const RING_SIZE = 25
+export const RING_SIZE = 25
+export const INNER_PATH = 5   // cells 25~29
+export const FINISH_POS = 30  // center finish
 const TOKENS_PER_PLAYER = 4
-// blue starts at the diagonally opposite cell
-const BLUE_START_OFFSET = 12
+export const BLUE_START_OFFSET = 12
 
 function createInitialState(redName: string, blueName: string): GameState {
   const tokens: Token[] = []
@@ -32,15 +33,30 @@ function createInitialState(redName: string, blueName: string): GameState {
 export function useGame() {
   const state = reactive<GameState>(createInitialState('玩家一', '玩家二'))
 
-  // absolute ring position for a token (accounts for player start offset)
+  // absolute outer ring position (only valid when ringPos < RING_SIZE)
   function absolutePos(token: Token): number {
+    if (token.ringPos < 0 || token.ringPos >= RING_SIZE) return -1
     const offset = token.player === 'red' ? 0 : BLUE_START_OFFSET
     return (offset + token.ringPos) % RING_SIZE
   }
 
+  // entry cell of inner path for each player on the outer ring
+  // red enters after cell 24 (index 24), blue enters after cell 24 offset by 12
+  // i.e. red's entry is at outer ringPos 24, blue's at outer ringPos 24
+  // Both enter inner path when they complete the full outer ring
+
   const currentTokens = computed(() =>
     state.tokens.filter(t => t.player === state.currentPlayer)
   )
+
+  function canMoveToken(token: Token): boolean {
+    if (token.finished) return false
+    if (state.diceValue === null) return false
+    // any value can bring token out of home base
+    if (token.ringPos === -1) return true
+    // cannot overshoot finish
+    return token.ringPos + state.diceValue! <= FINISH_POS
+  }
 
   function rollDice() {
     if (state.diceRolled || state.phase !== 'playing') return
@@ -57,15 +73,6 @@ export function useGame() {
     }
   }
 
-  function canMoveToken(token: Token): boolean {
-    if (token.finished) return false
-    if (state.diceValue === null) return false
-    // any dice value can bring token out of home base
-    if (token.ringPos === -1) return true
-    // on ring: cannot overshoot the finish
-    return token.ringPos + state.diceValue! <= RING_SIZE
-  }
-
   function moveToken(tokenId: string) {
     if (!state.diceRolled || state.phase !== 'playing') return
     const token = state.tokens.find(t => t.id === tokenId)
@@ -73,16 +80,18 @@ export function useGame() {
     if (!canMoveToken(token)) return
 
     if (token.ringPos === -1) {
-      // launch from home base: move directly by dice value
       token.ringPos = state.diceValue!
     } else {
       token.ringPos += state.diceValue!
     }
 
-    // check finish
-    if (token.ringPos === RING_SIZE) {
+    // wrap outer ring: after 24 continue into inner path (25+)
+    // ringPos 25~29 = inner path, 30 = finish
+    // no wrap needed since inner path continues linearly
+
+    if (token.ringPos >= FINISH_POS) {
+      token.ringPos = FINISH_POS
       token.finished = true
-      token.ringPos = RING_SIZE
       const allDone = state.tokens
         .filter(t => t.player === state.currentPlayer)
         .every(t => t.finished)
@@ -92,14 +101,15 @@ export function useGame() {
         state.message = `🎉 ${playerName(state.currentPlayer)} 获胜！`
         return
       }
+      state.message = `✨ ${playerName(state.currentPlayer)} 有棋到达终点！`
     }
 
-    // capture: check if any opponent token is on the same absolute cell
-    if (token.ringPos < RING_SIZE) {
+    // capture: only on outer ring cells
+    if (token.ringPos >= 0 && token.ringPos < RING_SIZE) {
       const myAbs = absolutePos(token)
       const opponent: PlayerColor = state.currentPlayer === 'red' ? 'blue' : 'red'
       state.tokens
-        .filter(t => t.player === opponent && !t.finished && t.ringPos >= 0)
+        .filter(t => t.player === opponent && !t.finished && t.ringPos >= 0 && t.ringPos < RING_SIZE)
         .forEach(opp => {
           if (absolutePos(opp) === myAbs) {
             opp.ringPos = -1
@@ -108,14 +118,7 @@ export function useGame() {
         })
     }
 
-    // roll 6 → extra turn
-    if (state.diceValue === 6) {
-      state.diceRolled = false
-      state.diceValue = null
-      state.message = `${playerName(state.currentPlayer)} 掷出6，再来一次！`
-    } else {
-      nextTurn()
-    }
+    nextTurn()
   }
 
   function nextTurn() {

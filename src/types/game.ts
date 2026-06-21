@@ -1,10 +1,13 @@
 export type PlayerColor = 'red' | 'blue'
 
 export interface Token {
-  id: string        // e.g. 'red-0', 'red-1'
+  id: string
   player: PlayerColor
-  index: number     // index in player's token list (0-3)
-  // position on the ring: -1 = home base, 0~24 = ring step, 25 = finished
+  index: number
+  // -1 = home base
+  // 0~24 = outer ring (25 cells)
+  // 25~29 = inner path (5 cells toward center)
+  // 30 = finished at center
   ringPos: number
   finished: boolean
 }
@@ -12,7 +15,6 @@ export interface Token {
 export interface Player {
   color: PlayerColor
   name: string
-  // start offset on the ring (red=0, blue=12 for diagonal on 25-cell ring)
   startOffset: number
 }
 
