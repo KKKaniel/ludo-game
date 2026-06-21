@@ -60,9 +60,9 @@ export function useGame() {
   function canMoveToken(token: Token): boolean {
     if (token.finished) return false
     if (state.diceValue === null) return false
-    // in home base: only 6 can bring it out
-    if (token.ringPos === -1) return state.diceValue === 6
-    // on ring: can move if won't overshoot (must land exactly on 25 or stop before)
+    // any dice value can bring token out of home base
+    if (token.ringPos === -1) return true
+    // on ring: cannot overshoot the finish
     return token.ringPos + state.diceValue! <= RING_SIZE
   }
 
@@ -73,8 +73,8 @@ export function useGame() {
     if (!canMoveToken(token)) return
 
     if (token.ringPos === -1) {
-      // launch from home base
-      token.ringPos = 0
+      // launch from home base: move directly by dice value
+      token.ringPos = state.diceValue!
     } else {
       token.ringPos += state.diceValue!
     }
