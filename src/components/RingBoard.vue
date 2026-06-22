@@ -6,6 +6,7 @@ import { RING_SIZE, BLUE_START_OFFSET, INNER_PATH, FINISH_POS } from '../composa
 const props = defineProps<{
   tokens: Token[]
   movableIds: Set<string>
+  animatingId: string | null
   absolutePos: (t: Token) => number
 }>()
 const emit = defineEmits<{ move: [id: string] }>()
@@ -62,6 +63,8 @@ const innerList = Array.from({ length: INNER_PATH }, (_, i) => i)
 const centerXY = cellXY(3, 3)
 const CCX = centerXY.x + CELL / 2
 const CCY = centerXY.y + CELL / 2
+
+function isAnimating(t: Token) { return t.id === props.animatingId }
 </script>
 
 <template>
@@ -70,9 +73,9 @@ const CCY = centerXY.y + CELL / 2
       <defs>
         <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
         <filter id="glow-gold"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="glow-anim"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       </defs>
 
-      <!-- bg -->
       <rect width="100%" height="100%" rx="14" fill="#0f0f23"/>
 
       <!-- red inner path bg -->
@@ -101,9 +104,9 @@ const CCY = centerXY.y + CELL / 2
           :x="cellXY(outerCells[pos].col, outerCells[pos].row).x"
           :y="cellXY(outerCells[pos].col, outerCells[pos].row).y"
           :width="CELL" :height="CELL" rx="6"
-          :fill="pos===0 ? 'rgba(231,76,60,0.3)' : pos===BLUE_START_OFFSET ? 'rgba(52,152,219,0.3)' : 'rgba(255,255,255,0.06)'"
-          :stroke="pos===0 ? '#e74c3c' : pos===BLUE_START_OFFSET ? '#3498db' : 'rgba(255,255,255,0.14)'"
-          :stroke-width="(pos===0||pos===BLUE_START_OFFSET) ? 2 : 1.5"
+          :fill="pos===0?'rgba(231,76,60,0.3)':pos===BLUE_START_OFFSET?'rgba(52,152,219,0.3)':'rgba(255,255,255,0.06)'"
+          :stroke="pos===0?'#e74c3c':pos===BLUE_START_OFFSET?'#3498db':'rgba(255,255,255,0.14)'"
+          :stroke-width="(pos===0||pos===BLUE_START_OFFSET)?2:1.5"
         />
         <text
           :x="cellXY(outerCells[pos].col, outerCells[pos].row).x + CELL/2"
@@ -111,25 +114,24 @@ const CCY = centerXY.y + CELL / 2
           text-anchor="middle" dominant-baseline="middle" class="cell-num"
         >{{ pos+1 }}</text>
 
-        <!-- tokens on outer cell -->
         <g v-for="(t,ti) in tokensOnOuter(pos)" :key="t.id"
           @click="movableIds.has(t.id) && emit('move', t.id)"
           :style="{cursor: movableIds.has(t.id)?'pointer':'default'}">
           <circle
             :cx="cellXY(outerCells[pos].col, outerCells[pos].row).x + CELL/2 + tokenOffset(ti, tokensOnOuter(pos).length)"
             :cy="cellXY(outerCells[pos].col, outerCells[pos].row).y + CELL/2"
-            r="14"
-            :fill="t.player==='red'?'rgba(231,76,60,0.85)':'rgba(52,152,219,0.85)'"
-            :stroke="movableIds.has(t.id)?'#fff':'rgba(255,255,255,0.3)'"
-            :stroke-width="movableIds.has(t.id)?2.5:1"
-            :filter="movableIds.has(t.id)?'url(#glow)':''"
-            :class="{movable: movableIds.has(t.id)}"
+            :r="isAnimating(t) ? 17 : 14"
+            :fill="t.player==='red'?'rgba(231,76,60,0.9)':'rgba(52,152,219,0.9)'"
+            :stroke="isAnimating(t)?'#FFD700':movableIds.has(t.id)?'#fff':'rgba(255,255,255,0.3)'"
+            :stroke-width="isAnimating(t)?3:movableIds.has(t.id)?2.5:1"
+            :filter="isAnimating(t)?'url(#glow-anim)':movableIds.has(t.id)?'url(#glow)':''"
+            :class="{movable: movableIds.has(t.id), animating: isAnimating(t)}"
           />
           <text
             :x="cellXY(outerCells[pos].col, outerCells[pos].row).x + CELL/2 + tokenOffset(ti, tokensOnOuter(pos).length)"
             :y="cellXY(outerCells[pos].col, outerCells[pos].row).y + CELL/2"
             text-anchor="middle" dominant-baseline="middle"
-            style="font-size:12px;pointer-events:none"
+            style="font-size:13px;pointer-events:none"
           >{{ t.player==='red'?'🗒':'🐷' }}</text>
         </g>
       </g>
@@ -142,15 +144,16 @@ const CCY = centerXY.y + CELL / 2
           <circle
             :cx="innerCellXY('red',idx).x + CELL/2 + tokenOffset(ti, tokensOnInner('red',idx).length)"
             :cy="innerCellXY('red',idx).y + CELL/2"
-            r="14" fill="rgba(231,76,60,0.85)"
-            :stroke="movableIds.has(t.id)?'#fff':'rgba(255,255,255,0.3)'"
-            :stroke-width="movableIds.has(t.id)?2.5:1"
-            :filter="movableIds.has(t.id)?'url(#glow)':''"
-            :class="{movable: movableIds.has(t.id)}"
+            :r="isAnimating(t)?17:14"
+            fill="rgba(231,76,60,0.9)"
+            :stroke="isAnimating(t)?'#FFD700':movableIds.has(t.id)?'#fff':'rgba(255,255,255,0.3)'"
+            :stroke-width="isAnimating(t)?3:movableIds.has(t.id)?2.5:1"
+            :filter="isAnimating(t)?'url(#glow-anim)':movableIds.has(t.id)?'url(#glow)':''"
+            :class="{movable: movableIds.has(t.id), animating: isAnimating(t)}"
           />
           <text :x="innerCellXY('red',idx).x+CELL/2+tokenOffset(ti,tokensOnInner('red',idx).length)"
             :y="innerCellXY('red',idx).y+CELL/2"
-            text-anchor="middle" dominant-baseline="middle" style="font-size:12px;pointer-events:none">🗒</text>
+            text-anchor="middle" dominant-baseline="middle" style="font-size:13px;pointer-events:none">🗒</text>
         </g>
       </g>
 
@@ -162,22 +165,23 @@ const CCY = centerXY.y + CELL / 2
           <circle
             :cx="innerCellXY('blue',idx).x + CELL/2 + tokenOffset(ti, tokensOnInner('blue',idx).length)"
             :cy="innerCellXY('blue',idx).y + CELL/2"
-            r="14" fill="rgba(52,152,219,0.85)"
-            :stroke="movableIds.has(t.id)?'#fff':'rgba(255,255,255,0.3)'"
-            :stroke-width="movableIds.has(t.id)?2.5:1"
-            :filter="movableIds.has(t.id)?'url(#glow)':''"
-            :class="{movable: movableIds.has(t.id)}"
+            :r="isAnimating(t)?17:14"
+            fill="rgba(52,152,219,0.9)"
+            :stroke="isAnimating(t)?'#FFD700':movableIds.has(t.id)?'#fff':'rgba(255,255,255,0.3)'"
+            :stroke-width="isAnimating(t)?3:movableIds.has(t.id)?2.5:1"
+            :filter="isAnimating(t)?'url(#glow-anim)':movableIds.has(t.id)?'url(#glow)':''"
+            :class="{movable: movableIds.has(t.id), animating: isAnimating(t)}"
           />
           <text :x="innerCellXY('blue',idx).x+CELL/2+tokenOffset(ti,tokensOnInner('blue',idx).length)"
             :y="innerCellXY('blue',idx).y+CELL/2"
-            text-anchor="middle" dominant-baseline="middle" style="font-size:12px;pointer-events:none">🐷</text>
+            text-anchor="middle" dominant-baseline="middle" style="font-size:13px;pointer-events:none">🐷</text>
         </g>
       </g>
 
       <!-- finished tokens at center -->
       <g v-for="(t,i) in finishedTokens" :key="'fin'+t.id">
         <circle
-          :cx="CCX + (i%2===0?-10:10)" :cy="CCY + (i<2?-10:10)"
+          :cx="CCX+(i%2===0?-10:10)" :cy="CCY+(i<2?-10:10)"
           r="9" :fill="t.player==='red'?'#e74c3c':'#3498db'"
           stroke="gold" stroke-width="2"/>
         <text :x="CCX+(i%2===0?-10:10)" :y="CCY+(i<2?-10:10)"
@@ -196,8 +200,13 @@ const CCY = centerXY.y + CELL / 2
 .finish-label { font-size:11px; font-weight:bold; fill:gold; pointer-events:none; }
 .finish-score { font-size:13px; font-weight:bold; pointer-events:none; }
 .movable { animation: pulse 0.9s infinite alternate; }
+.animating { animation: bounce 0.32s ease-in-out infinite alternate; }
 @keyframes pulse {
   from { filter: brightness(1); }
   to { filter: brightness(1.7) drop-shadow(0 0 6px #fff); }
+}
+@keyframes bounce {
+  from { transform: scale(1); }
+  to { transform: scale(1.15); }
 }
 </style>

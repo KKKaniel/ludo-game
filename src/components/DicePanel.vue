@@ -2,57 +2,61 @@
 const props = defineProps<{
   diceValue: number | null
   diceRolled: boolean
-  currentPlayer: 'red' | 'blue'
+  isAnimating: { value: boolean }
+  currentPlayer: string
   playerName: string
   phase: string
 }>()
 const emit = defineEmits<{ roll: [] }>()
 
 const faces = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
-const color = () => props.currentPlayer === 'red' ? '#e74c3c' : '#3498db'
 </script>
 
 <template>
   <div class="dice-panel">
-    <div class="dice-face" :style="{ color: color() }">
-      {{ diceValue !== null ? faces[diceValue] : '🎲' }}
-    </div>
-    <button
-      class="btn-roll"
-      :disabled="diceRolled || phase !== 'playing'"
-      :style="{ background: `linear-gradient(135deg, ${color()}, #555)` }"
+    <div
+      class="dice"
+      :class="{
+        'dice-red': currentPlayer === 'red',
+        'dice-blue': currentPlayer === 'blue',
+        'dice-roll-anim': !diceRolled && !isAnimating.value && phase === 'playing',
+      }"
       @click="emit('roll')"
     >
-      {{ diceRolled ? `已掷出 ${diceValue}` : `${playerName} 掷骰子` }}
-    </button>
+      <span class="dice-face">{{ diceValue ? faces[diceValue] : '🎲' }}</span>
+    </div>
+    <div class="hint">
+      <span v-if="phase === 'finished'">🎉</span>
+      <span v-else-if="isAnimating.value">✈️ 移动中…</span>
+      <span v-else-if="!diceRolled">点击掷骰</span>
+      <span v-else>选择棋子</span>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.dice-panel {
-  display: flex;
-  align-items: center;
-  gap: 1.2rem;
-  background: rgba(255,255,255,0.06);
-  border-radius: 12px;
-  padding: 0.75rem 1.5rem;
-}
-.dice-face {
-  font-size: 2.8rem;
-  line-height: 1;
-  min-width: 2.8rem;
-  text-align: center;
-}
-.btn-roll {
-  padding: 0.6rem 1.5rem;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: bold;
+.dice-panel { display:flex; flex-direction:column; align-items:center; gap:0.4rem; }
+.dice {
+  width: 72px; height: 72px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.6rem;
   cursor: pointer;
-  transition: opacity 0.2s;
+  border: 2px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.07);
+  transition: transform 0.15s, box-shadow 0.15s;
+  user-select: none;
 }
-.btn-roll:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-roll:not(:disabled):hover { opacity: 0.85; }
+.dice:hover { transform: scale(1.08); }
+.dice-red { border-color: #e74c3c; box-shadow: 0 0 12px rgba(231,76,60,0.4); }
+.dice-blue { border-color: #3498db; box-shadow: 0 0 12px rgba(52,152,219,0.4); }
+.dice-roll-anim { animation: shake 1.5s infinite; }
+@keyframes shake {
+  0%,100% { transform: rotate(0deg); }
+  20% { transform: rotate(-8deg) scale(1.05); }
+  40% { transform: rotate(8deg) scale(1.05); }
+  60% { transform: rotate(-5deg); }
+  80% { transform: rotate(5deg); }
+}
+.hint { font-size: 0.82rem; color: rgba(255,255,255,0.5); }
 </style>

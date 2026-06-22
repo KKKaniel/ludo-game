@@ -1,11 +1,12 @@
-import { reactive, computed } from 'vue'
+import { reactive, computed, ref } from 'vue'
 import type { GameState, Token, PlayerColor } from '../types/game'
 
 export const RING_SIZE = 25
-export const INNER_PATH = 5   // cells 25~29
-export const FINISH_POS = 30  // center finish
+export const INNER_PATH = 5
+export const FINISH_POS = 30
 const TOKENS_PER_PLAYER = 4
 export const BLUE_START_OFFSET = 12
+const STEP_DELAY = 320 // ms per step
 
 function createInitialState(redName: string, blueName: string): GameState {
   const tokens: Token[] = []
@@ -32,18 +33,16 @@ function createInitialState(redName: string, blueName: string): GameState {
 
 export function useGame() {
   const state = reactive<GameState>(createInitialState('玩家一', '玩家二'))
+  // true while a token is animating — blocks dice roll and token selection
+  const isAnimating = ref(false)
+  // id of the token currently animating (for highlight)
+  const animatingId = ref<string | null>(null)
 
-  // absolute outer ring position (only valid when ringPos < RING_SIZE)
   function absolutePos(token: Token): number {
     if (token.ringPos < 0 || token.ringPos >= RING_SIZE) return -1
     const offset = token.player === 'red' ? 0 : BLUE_START_OFFSET
     return (offset + token.ringPos) % RING_SIZE
   }
-
-  // entry cell of inner path for each player on the outer ring
-  // red enters after cell 24 (index 24), blue enters after cell 24 offset by 12
-  // i.e. red's entry is at outer ringPos 24, blue's at outer ringPos 24
-  // Both enter inner path when they complete the full outer ring
 
   const currentTokens = computed(() =>
     state.tokens.filter(t => t.player === state.currentPlayer)
@@ -52,18 +51,15 @@ export function useGame() {
   function canMoveToken(token: Token): boolean {
     if (token.finished) return false
     if (state.diceValue === null) return false
-    // any value can bring token out of home base
     if (token.ringPos === -1) return true
-    // cannot overshoot finish
     return token.ringPos + state.diceValue! <= FINISH_POS
   }
 
   function rollDice() {
-    if (state.diceRolled || state.phase !== 'playing') return
+    if (state.diceRolled || state.phase !== 'playing' || isAnimating.value) return
     const val = Math.floor(Math.random() * 6) + 1
     state.diceValue = val
     state.diceRolled = true
-
     const canMove = currentTokens.value.some(t => canMoveToken(t))
     if (!canMove) {
       state.message = `${playerName(state.currentPlayer)} 无棋可走，换手`
@@ -74,21 +70,43 @@ export function useGame() {
   }
 
   function moveToken(tokenId: string) {
-    if (!state.diceRolled || state.phase !== 'playing') return
+    if (!state.diceRolled || state.phase !== 'playing' || isAnimating.value) return
     const token = state.tokens.find(t => t.id === tokenId)
     if (!token || token.player !== state.currentPlayer) return
     if (!canMoveToken(token)) return
 
-    if (token.ringPos === -1) {
-      token.ringPos = state.diceValue!
-    } else {
-      token.ringPos += state.diceValue!
-    }
+    const steps = state.diceValue!
+    // starting position: -1 means first step lands on pos 1 (diceValue steps from 0)
+    const startPos = token.ringPos === -1 ? 0 : token.ringPos
+    const targetPos = token.ringPos === -1 ? steps : token.ringPos + steps
 
-    // wrap outer ring: after 24 continue into inner path (25+)
-    // ringPos 25~29 = inner path, 30 = finish
-    // no wrap needed since inner path continues linearly
+    // lock board during animation
+    isAnimating.value = true
+    animatingId.value = tokenId
+    state.diceRolled = false // hide movable highlights while animating
+    state.message = `✈️ 移动中…`
 
+    // set to start before animating
+    if (token.ringPos === -1) token.ringPos = 0
+
+    let step = 0
+    const interval = setInterval(() => {
+      step++
+      const nextPos = startPos + step
+      token.ringPos = Math.min(nextPos, FINISH_POS)
+
+      if (step >= steps) {
+        clearInterval(interval)
+        token.ringPos = Math.min(targetPos, FINISH_POS)
+        animatingId.value = null
+        isAnimating.value = false
+        afterMove(token)
+      }
+    }, STEP_DELAY)
+  }
+
+  function afterMove(token: Token) {
+    // check finish
     if (token.ringPos >= FINISH_POS) {
       token.ringPos = FINISH_POS
       token.finished = true
@@ -104,7 +122,7 @@ export function useGame() {
       state.message = `✨ ${playerName(state.currentPlayer)} 有棋到达终点！`
     }
 
-    // capture: only on outer ring cells
+    // capture on outer ring
     if (token.ringPos >= 0 && token.ringPos < RING_SIZE) {
       const myAbs = absolutePos(token)
       const opponent: PlayerColor = state.currentPlayer === 'red' ? 'blue' : 'red'
@@ -133,12 +151,16 @@ export function useGame() {
   }
 
   function restartGame(redName: string, blueName: string) {
+    isAnimating.value = false
+    animatingId.value = null
     const fresh = createInitialState(redName, blueName)
     Object.assign(state, fresh)
   }
 
   return {
     state,
+    isAnimating,
+    animatingId,
     absolutePos,
     canMoveToken,
     rollDice,

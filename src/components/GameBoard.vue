@@ -7,67 +7,63 @@ import HomeBase from './HomeBase.vue'
 
 const props = defineProps<{ redName: string; blueName: string }>()
 
-const { state, canMoveToken, rollDice, moveToken, restartGame, absolutePos, playerName } = useGame()
+const { state, isAnimating, animatingId, canMoveToken, rollDice, moveToken, restartGame, absolutePos, playerName } = useGame()
 
-// sync names from props on mount
 state.players[0].name = props.redName
 state.players[1].name = props.blueName
 
 const isCurrentPlayer = (color: string) => state.currentPlayer === color
 
 const movableIds = computed(() => {
-  if (!state.diceRolled) return new Set<string>()
+  if (!state.diceRolled || isAnimating.value) return new Set<string>()
   return new Set(state.tokens.filter(t => canMoveToken(t)).map(t => t.id))
 })
 </script>
 
 <template>
   <div class="game-board">
-    <!-- 消息栏 -->
     <div class="message-bar">{{ state.message }}</div>
 
-    <!-- 主体：大本营 + 棋盘 + 大本营 -->
     <div class="main-area">
-      <!-- 红方大本营 -->
       <HomeBase
         color="red"
         :name="state.players[0].name"
         :tokens="state.tokens.filter(t => t.player === 'red' && t.ringPos === -1)"
         :movable-ids="movableIds"
+        :animating-id="animatingId"
         :is-active="isCurrentPlayer('red')"
         @move="moveToken"
       />
 
-      <!-- 环形棋盘 -->
       <RingBoard
         :tokens="state.tokens"
         :movable-ids="movableIds"
+        :animating-id="animatingId"
         :absolute-pos="absolutePos"
         @move="moveToken"
       />
 
-      <!-- 蓝方大本营 -->
       <HomeBase
         color="blue"
         :name="state.players[1].name"
         :tokens="state.tokens.filter(t => t.player === 'blue' && t.ringPos === -1)"
         :movable-ids="movableIds"
+        :animating-id="animatingId"
         :is-active="isCurrentPlayer('blue')"
         @move="moveToken"
       />
     </div>
 
-    <!-- 骰子面板 -->
     <DicePanel
       :dice-value="state.diceValue"
       :dice-rolled="state.diceRolled"
+      :is-animating="isAnimating"
       :current-player="state.currentPlayer"
       :player-name="playerName(state.currentPlayer)"
       :phase="state.phase"
       @roll="rollDice"
     />
 
-    <!-- 胜利弹窗 -->
     <div v-if="state.phase === 'finished'" class="winner-overlay">
       <div class="winner-card">
         <div class="winner-emoji">🏆</div>
