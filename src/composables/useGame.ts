@@ -1,12 +1,13 @@
 import { reactive, computed, ref } from 'vue'
 import type { GameState, Token, PlayerColor } from '../types/game'
+import { PENALTIES } from './penalties'
 
 export const RING_SIZE = 25
 export const INNER_PATH = 5
 export const FINISH_POS = 30
 const TOKENS_PER_PLAYER = 4
 export const BLUE_START_OFFSET = 12
-const STEP_DELAY = 320 // ms per step
+const STEP_DELAY = 320
 
 function createInitialState(redName: string, blueName: string): GameState {
   const tokens: Token[] = []
@@ -28,14 +29,13 @@ function createInitialState(redName: string, blueName: string): GameState {
     diceRolled: false,
     winner: null,
     message: '红方掷骰子',
+    penalty: null,
   }
 }
 
 export function useGame() {
   const state = reactive<GameState>(createInitialState('玩家一', '玩家二'))
-  // true while a token is animating — blocks dice roll and token selection
   const isAnimating = ref(false)
-  // id of the token currently animating (for highlight)
   const animatingId = ref<string | null>(null)
 
   function absolutePos(token: Token): number {
@@ -76,25 +76,21 @@ export function useGame() {
     if (!canMoveToken(token)) return
 
     const steps = state.diceValue!
-    // starting position: -1 means first step lands on pos 1 (diceValue steps from 0)
     const startPos = token.ringPos === -1 ? 0 : token.ringPos
     const targetPos = token.ringPos === -1 ? steps : token.ringPos + steps
 
-    // lock board during animation
     isAnimating.value = true
     animatingId.value = tokenId
-    state.diceRolled = false // hide movable highlights while animating
+    state.diceRolled = false
     state.message = `✈️ 移动中…`
+    state.penalty = null
 
-    // set to start before animating
     if (token.ringPos === -1) token.ringPos = 0
 
     let step = 0
     const interval = setInterval(() => {
       step++
-      const nextPos = startPos + step
-      token.ringPos = Math.min(nextPos, FINISH_POS)
-
+      token.ringPos = Math.min(startPos + step, FINISH_POS)
       if (step >= steps) {
         clearInterval(interval)
         token.ringPos = Math.min(targetPos, FINISH_POS)
@@ -106,13 +102,10 @@ export function useGame() {
   }
 
   function afterMove(token: Token) {
-    // check finish
     if (token.ringPos >= FINISH_POS) {
       token.ringPos = FINISH_POS
       token.finished = true
-      const allDone = state.tokens
-        .filter(t => t.player === state.currentPlayer)
-        .every(t => t.finished)
+      const allDone = state.tokens.filter(t => t.player === state.currentPlayer).every(t => t.finished)
       if (allDone) {
         state.phase = 'finished'
         state.winner = state.currentPlayer
@@ -120,22 +113,46 @@ export function useGame() {
         return
       }
       state.message = `✨ ${playerName(state.currentPlayer)} 有棋到达终点！`
+      nextTurn()
+      return
     }
 
-    // capture on outer ring
+    // capture
     if (token.ringPos >= 0 && token.ringPos < RING_SIZE) {
       const myAbs = absolutePos(token)
       const opponent: PlayerColor = state.currentPlayer === 'red' ? 'blue' : 'red'
+      let captured = false
       state.tokens
         .filter(t => t.player === opponent && !t.finished && t.ringPos >= 0 && t.ringPos < RING_SIZE)
         .forEach(opp => {
           if (absolutePos(opp) === myAbs) {
             opp.ringPos = -1
-            state.message = `💥 踩到 ${playerName(opponent)} 的棋子，回到大本营！`
+            captured = true
           }
         })
+      if (captured) {
+        state.message = `💥 踩到 ${playerName(opponent === 'red' ? 'red' : 'blue')} 的棋子，回大本营！`
+        nextTurn()
+        return
+      }
+
+      // check penalty
+      const penalty = PENALTIES[myAbs]
+      if (penalty) {
+        state.penalty = { absPos: myAbs, ...penalty }
+        state.message = `🎲 踩中惩罚格！${penalty.text}`
+        // pause turn until player confirms
+        state.phase = 'penalty'
+        return
+      }
     }
 
+    nextTurn()
+  }
+
+  function confirmPenalty() {
+    state.penalty = null
+    state.phase = 'playing'
     nextTurn()
   }
 
@@ -165,6 +182,7 @@ export function useGame() {
     canMoveToken,
     rollDice,
     moveToken,
+    confirmPenalty,
     restartGame,
     playerName,
   }
